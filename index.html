@@ -679,6 +679,34 @@ async function generatePDF() {
   showToast("PDF Downloaded ✓");
 }
 
+async function uploadPDFToDrive(pdfBlob, filename) {
+
+    const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onloadend = () => {
+            resolve(reader.result.split(",")[1]);
+        };
+
+        reader.onerror = reject;
+
+        reader.readAsDataURL(pdfBlob);
+    });
+
+    const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbzwow1Q1TNOTPi01GDIkaao33ZF6uNAv1jF40PXvWgxl13Czbsm1M7CGq7lMXrJyBt3/exec",
+        {
+            method: "POST",
+            body: JSON.stringify({
+                filename: filename,
+                pdf: base64
+            })
+        }
+    );
+
+    return await response.json();
+}
+  
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
