@@ -442,6 +442,7 @@ const tasks = [
 ];
 
 let state = {};
+let currentTaskId = tasks[0].id; // tracks which tab/panel is currently open
 
 function getState(taskId, levelNum, field) { return state[`${taskId}_${field}_${levelNum}`]; }
 function setState(taskId, levelNum, field, value) { state[`${taskId}_${field}_${levelNum}`] = value; }
@@ -468,14 +469,15 @@ function renderTabs() {
   let html = '';
   tasks.forEach((t, index) => {
     const assessed = t.levels.filter(l => getState(t.id, l.num, 'ans')).length;
-    const activeClass = index === 0 ? 'active' : '';
+    const activeClass = t.id === currentTaskId ? 'active' : '';
     html += `<button class="tab-btn ${activeClass}" data-task="${t.id}" onclick="switchTask('${t.id}')">${t.name} <span class="count">${assessed}/5</span></button>`;
   });
-  html += `<button class="tab-btn" data-task="summary" onclick="switchTask('summary')">📊 Summary</button>`;
+  html += `<button class="tab-btn ${currentTaskId === 'summary' ? 'active' : ''}" data-task="summary" onclick="switchTask('summary')">📊 Summary</button>`;
   container.innerHTML = html;
 }
 
 function switchTask(taskId) {
+  currentTaskId = taskId;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   if (taskId === 'summary') { document.getElementById('panel-summary').classList.add('active'); updateSummary(); }
@@ -489,7 +491,7 @@ function renderPanels() {
   tasks.forEach((t, tIdx) => {
     const panel = document.createElement('div');
     panel.id = 'panel-'+t.id;
-    panel.className = 'panel ' + (tIdx === 0 ? 'active' : '');
+    panel.className = 'panel ' + (t.id === currentTaskId ? 'active' : '');
     let levelsHtml = '';
     t.levels.forEach(l => {
       const ans = getState(t.id, l.num, 'ans') || '';
