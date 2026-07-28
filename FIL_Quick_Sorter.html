@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FIL Quick Sorter — Clinical Assessment</title>
+
+<!-- Libraries for PDF Generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --success: #059669;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --border: #e2e8f0;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  }
+
+  /* Reset & Base Styles */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { 
+    background: var(--bg); 
+    font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+    color: var(--text-main); 
+    margin: 0; 
+    padding: 0;
+    line-height: 1.5;
+  }
+
+  .container { width: 100%; max-width: 1000px; margin: 0 auto; padding: 16px; }
+
+  /* Typography */
+  h1 { font-size: 1.5rem; font-weight: 800; margin: 0 0 4px 0; text-align: center; color: var(--text-main); }
+  .subtitle { font-size: 0.875rem; color: var(--text-muted); text-align: center; margin-bottom: 24px; display: block; }
+
+  /* Patient Info Bar */
+  .patient-bar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    background: var(--card);
+    padding: 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.025em; }
+  .field input, .field select, .field textarea { 
+    padding: 12px; 
+    border: 1px solid var(--border); 
+    border-radius: var(--radius-sm); 
+    font-size: 16px; 
+    width: 100%;
+    background: #fff;
+    transition: border-color 0.2s;
+  }
+  .field input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  /* Folder Button Style */
+  .folder-btn {
+    padding: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px dashed var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+  }
+  .folder-btn:hover { background: #dbeafe; }
+
+  .global-fil {
+    background: var(--accent-soft);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid var(--accent);
+  }
+  .global-fil label { font-weight: 700; color: var(--accent); font-size: 0.9rem; }
+
+  /* Navigation Tabs */
+  .tabs-container {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 50;
+    margin: 0 -16px 20px -16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  
+  .tab-btn {
+    white-space: nowrap;
+    padding: 10px 16px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab-btn .count { opacity: 0.7; font-size: 0.75rem; margin-left: 4px; }
+
+  /* Panels */
+  .panel { display: none; animation: fadeIn 0.3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Task Header & Meta */
+  .task-header { background: #fff; padding: 20px; border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom: 1px solid var(--border); }
+  .task-header h2 { margin: 0 0 16px 0; font-size: 1.25rem; color: var(--accent); }
+  
+  .task-meta-grid { 
+    display: grid; 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 12px; 
+  }
+  .meta-card { 
+    background: var(--bg); 
+    padding: 12px; 
+    border-radius: var(--radius-sm); 
+    text-align: center;
+  }
+  .meta-val { display: block; font-size: 1rem; font-weight: 800; color: var(--text-main); }
+  .meta-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+
+  /* Assessment Level Cards */
+  .level-card { 
+    background: var(--card); 
+    border-radius: var(--radius-md); 
+    box-shadow: var(--shadow); 
+    margin-bottom: 16px; 
+    overflow: hidden; 
+    border: 1px solid var(--border);
+  }
+  .level-top { padding: 16px; background: #fafafa; border-bottom: 1px solid var(--border); }
+  .level-badge-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .level-identity { display: flex; align-items: center; gap: 8px; }
+  .level-num { 
+    background: var(--accent); color: #fff; width: 24px; height: 24px; 
+    border-radius: 50%; font-size: 0.75rem; font-weight: 800; 
+    display: flex; align-items: center; justify-content: center; 
+  }
+  .level-name { font-weight: 700; font-size: 0.9rem; }
+  .badge-status { padding: 4px 10px; border-radius: 100px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+  .status-yes { background: #dcfce7; color: #166534; }
+  .status-partial { background: #fef3c7; color: #92400e; }
+  .status-no { background: #fee2e2; color: #991b1b; }
+  
+  .level-stmt { font-size: 0.875rem; color: var(--text-muted); line-height: 1.4; }
+  .level-content { padding: 16px; }
+
+  /* Choice Groupings */
+  .choice-group { margin-bottom: 20px; }
+  .choice-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; }
+  
+  .cb-list { display: flex; flex-direction: column; gap: 8px; }
+  .cb-item { 
+    display: flex; align-items: center; gap: 12px; 
+    padding: 12px; border: 1px solid var(--border); 
+    border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s;
+  }
+  .cb-item.checked { background: var(--accent-soft); border-color: var(--accent); }
+  .cb-item input { width: 18px; height: 18px; accent-color: var(--accent); }
+  .cb-item span { font-size: 0.85rem; flex: 1; }
+
+  /* Calculation Display */
+  .calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .calc-box { text-align: center; }
+  .calc-box .v { display: block; font-weight: 800; font-size: 1.1rem; color: var(--accent); }
+  .calc-box .l { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+
+  /* Summary Table */
+  .table-wrapper { width: 100%; overflow-x: auto; background: #fff; border-radius: var(--radius-md); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; min-width: 600px; }
+  th { background: #f1f5f9; text-align: left; padding: 12px; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); }
+  td { padding: 12px; border-top: 1px solid var(--border); font-size: 0.875rem; }
+  tr:nth-child(even) { background: #f8fafc; }
+
+  /* FAB Floating Buttons */
+  .fab-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 12px; z-index: 100; }
+  .btn-fab { 
+    width: 56px; height: 56px; border-radius: 50%; border: none; 
+    display: flex; align-items: center; justify-content: center; 
+    color: white; font-size: 24px; cursor: pointer; box-shadow: var(--shadow-lg); 
+  }
+  .btn-save { background: var(--success); }
+  .btn-print { background: var(--accent); }
+
+  /* Toast Notification */
+  .toast { 
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+    background: #1e293b; color: white; padding: 12px 24px; border-radius: 100px; 
+    font-size: 0.875rem; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Desktop Adjustments (Tablet+) */
+  @media (min-width: 768px) {
+    .patient-bar { grid-template-columns: 2fr 1fr 1fr; }
+    .task-meta-grid { grid-template-columns: repeat(5, 1fr); }
+    .cb-list { display: grid; grid-template-columns: 1fr 1fr; }
+    .global-fil { flex-direction: row; align-items: center; }
+    .global-fil input { width: 200px; margin-left: auto; }
+    .tabs-container { position: static; padding: 0; border: none; margin-bottom: 20px; }
+    .tabs { flex-wrap: wrap; overflow-x: visible; }
+  }
+
+  /* Print Styles */
+  @media print {
+    .tabs-container, .fab-container, .global-fil, .level-content select, .cb-list, .badge-status, .folder-btn { display: none !important; }
+    .container { max-width: 100%; padding: 0; }
+    .panel { display: block !important; page-break-after: always; }
+    .level-card { border: 1px solid #ccc; break-inside: avoid; }
+    .patient-bar { box-shadow: none; border: 1px solid #000; margin-bottom: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1 onclick="revealFolderBtn()">🧠 FIL Quick Sorter</h1>
+  <span class="subtitle">Functional Independence Level Assessment Tool</span>
+
+  <div class="patient-bar">
+    <div class="field"><label>Patient Name</label><input id="ptName" placeholder="Full Name"></div>
+    <div class="field"><label>UID / MRN</label><input id="ptId" placeholder="Identification"></div>
+    <div class="field"><label>Assessment Date</label><input type="date" id="ptDate"></div>
+    <div class="field"><label>Assessor</label><input id="ptAssessor" placeholder="Therapist Name"></div>
+    <!-- NEW: Save Folder Button -->
+    <div class="field" id="folderField" style="display: none;">
+  <label>Save Destination</label>
+  <button type="button" class="folder-btn" id="folderBtn" onclick="pickSaveFolder()">📁 Click to set save folder</button>
+</div>
+  </div>
+
+  <div class="global-fil">
+    <label>🎯 FIL Overall (Therapist Judgement):</label>
+    <input id="filTherapist" placeholder="e.g. FIL 3">
+  </div>
+
+  <div class="tabs-container">
+    <div class="tabs" id="taskTabs"></div>
+  </div>
+
+  <div id="panelsContainer"></div>
+
+  <!-- Summary Panel -->
+  <div id="panel-summary" class="panel">
+    <div class="task-header" style="border-radius: var(--radius-md);">
+      <h2>📊 Assessment Summary</h2>
+      <div class="task-meta-grid">
+        <div class="meta-card"><span class="meta-val" id="sum-tasks">0</span><span class="meta-label">Tasks</span></div>
+        <div class="meta-card"><span class="meta-val" id="sum-avg-dep">—</span><span class="meta-label">Avg Dep %</span></div>
+        <div class="meta-card"><span class="meta-val" id="sum-avg-ind">—</span><span class="meta-label">Avg Ind %</span></div>
+        <div class="meta-card"><span class="meta-val" id="sum-avg-c2r">—</span><span class="meta-label">Avg C2R %</span></div>
+      </div>
+    </div>
+    
+    <div class="table-wrapper" style="margin: 20px 0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>FIL Achieved</th>
+            <th>To Train</th>
+            <th>Dep %</th>
+            <th>Ind %</th>
+            <th>C2R %</th>
+          </tr>
+        </thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
+    </div>
+
+    <div class="field" style="margin-bottom: 100px;">
+      <label>Clinical Notes & Recommendations</label>
+      <textarea id="clinicalNotes" rows="6" placeholder="Document observations and clinical goals..."></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="fab-container">
+  <button class="btn-fab btn-print" onclick="window.print()" title="Print Page">🖨️</button>
+  <button class="btn-fab btn-save" onclick="generatePDF()" title="Export Professional PDF">📄</button>
+</div>
+
+<div class="toast" id="toast">Message</div>
+
+<script>
+/** 
+ * PERSISTENT FOLDER LOGIC (IndexedDB)
+ */
+
+
+
+
+let clickCount = 0;
+function revealFolderBtn() {
+  clickCount++;
+  if (clickCount >= 5) {
+    document.getElementById('folderField').style.display = 'flex';
+    showToast("Folder settings revealed");
+    clickCount = 0; // reset
+  }
+}
+
+
+
+
+const IDB_NAME = 'filPDF_DB', IDB_STORE = 'handles';
+function idbGet(key) {
+  return new Promise(resolve => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => {
+      const getReq = req.result.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+      getReq.onsuccess = () => resolve(getReq.result || null);
+    };
+  });
+}
+function idbSet(key, value) {
+  return new Promise(resolve => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => {
+      const tx = req.result.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve(true);
+    };
+  });
+}
+
+let saveDirHandle = null;
+
+async function restoreFolder() {
+  saveDirHandle = await idbGet('saveDir');
+  if (saveDirHandle) {
+    document.getElementById('folderBtn').textContent = '📁 Folder: ' + saveDirHandle.name;
+  }
+}
+
+async function pickSaveFolder() {
+  if (!window.showDirectoryPicker) {
+    alert("This browser doesn't support folder selection. Please use Chrome or Edge.");
+    return;
+  }
+  try {
+    saveDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await idbSet('saveDir', saveDirHandle);
+    document.getElementById('folderBtn').textContent = '📁 Folder: ' + saveDirHandle.name;
+    showToast("Destination folder set!");
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/** 
+ * CLINICAL OPTIONS & TASKS
+ */
+const difficultyOptions = [
+  'Has difficulty doing it correctly',
+  'Can do it, but takes a long time or gets tired quickly',
+  'Can do it only with reminders or someone watching',
+  'Has trouble doing it safely or appropriately',
+  'Not confident, avoids it, or cannot manage in new places'
+];
+
+const assistanceOptions = [
+  'Physical Prompts',
+  'Tools and Devices',
+  'Visual or Verbal prompts',
+  'Memory Aids',
+  'Environment Modification'
+];
+
+const tasks = [
+  {
+    id: 'drinking', name: 'Drinking',
+    levels: [
+      {num:1, name:'1 – Bedside Sitting', stmt:'Can the individual come to a sitting position on or at the edge of the bed and drink a beverage or water that has already been served?'},
+      {num:2, name:'2 – Transfer Independent', stmt:'Can the individual independently get out of bed and sit on a chair next to the bed or elsewhere in the bedroom and drink a beverage that has already been served?'},
+      {num:3, name:'3 – Bedroom Independent', stmt:'Can the individual independently get out of bed, go to the place where beverages or water are kept within the bedroom, serve themselves, and drink?'},
+      {num:4, name:'4 – Home Independent', stmt:'Can the individual independently get out of bed, go to the kitchen or any beverage storage area in the house, prepare or serve a drink, and drink it without assistance?'},
+      {num:5, name:'5 – Community Independent', stmt:'Can the individual independently leave the house, go to a nearby shop or restaurant, obtain a bottle of water, coffee, or another beverage, and drink it without assistance?'}
+    ]
+  },
+  {
+    id: 'eating', name: 'Eating',
+    levels: [
+      {num:1, name:'1 – Bedside Sitting', stmt:'Can the individual come to a sitting position on or at the edge of the bed and eat food that has already been served?'},
+      {num:2, name:'2 – Transfer Independent', stmt:'Can the individual independently get out of bed and sit on a chair next to the bed or elsewhere in the bedroom and eat the food that has already been served?'},
+      {num:3, name:'3 – Bedroom Independent', stmt:'Can the individual independently get out of bed, go to the place where food is kept within the bedroom, serve themselves, and eat?'},
+      {num:4, name:'4 – Home Independent', stmt:'Can the individual independently get out of bed, go to the kitchen or dining area in the house, prepare or serve a meal, and eat it without assistance?'},
+      {num:5, name:'5 – Community Independent', stmt:'Can the individual independently leave the house, go to a nearby shop or restaurant, cafe, or food outlet and order a meal, and eat it without assistance?'}
+    ]
+  },
+  {
+    id: 'brushing', name: 'Brushing',
+    levels: [
+      {num:1, name:'1 – Bedside Sitting', stmt:'Can the individual come to a sitting position at the edge of the bed and brush their teeth using items that have already been provided?'},
+      {num:2, name:'2 – Transfer Independent', stmt:'Can the individual independently get out of bed and sit on a chair next to the bed or elsewhere in the bedroom and brush their teeth using items that have already been provided?'},
+      {num:3, name:'3 – Bedroom Independent', stmt:'Can the individual independently get out of bed, go to the wash area or location within the bedroom, gather oral care items, and brush their teeth without assistance?'},
+      {num:4, name:'4 – Home Independent', stmt:'Can the individual independently get out of bed, go to the bathroom or wash area in the house, gather the required items, and brush their teeth without assistance?'},
+      {num:5, name:'5 – Community Independent', stmt:'Can the individual independently leave the house, access a public restroom or hotel bathroom or neighbor\'s residence, obtain the necessary items if required, and brush their teeth without assistance?'}
+    ]
+  },
+  {
+    id: 'combing', name: 'Combing',
+    levels: [
+      {num:1, name:'1 – Bedside Sitting', stmt:'Can the individual come to a sitting position on or at the edge of the bed and comb their hair using a comb or brush that has already been provided?'},
+      {num:2, name:'2 – Transfer Independent', stmt:'Can the individual independently get out of bed and sit on a chair next to the bed or elsewhere in the bedroom and comb their hair using a comb or brush that has already been provided?'},
+      {num:3, name:'3 – Bedroom Independent', stmt:'Can the individual independently get out of bed, go to the place within the bedroom where grooming items are kept, and comb their hair without assistance?'},
+      {num:4, name:'4 – Home Independent', stmt:'Can the individual independently get out of bed, go to the dressing area or mirror in the house, gather the required items, and comb their hair without assistance?'},
+      {num:5, name:'5 – Community Independent', stmt:'Can the individual independently leave the house, access a salon or another setting, obtain a comb or brush if needed, and groom their hair without assistance?'}
+    ]
+  }
+];
+
+let state = {};
+
+function getState(taskId, levelNum, field) { return state[`${taskId}_${field}_${levelNum}`]; }
+function setState(taskId, levelNum, field, value) { state[`${taskId}_${field}_${levelNum}`] = value; }
+function getArr(taskId, levelNum, field) { const key = `${taskId}_${field}_${levelNum}`; return state[key] || []; }
+function toggleArr(taskId, levelNum, field, value) {
+  const key = `${taskId}_${field}_${levelNum}`;
+  const arr = state[key] || [];
+  const idx = arr.indexOf(value);
+  if (idx > -1) arr.splice(idx, 1);
+  else arr.push(value);
+  state[key] = arr;
+}
+
+function init() {
+  document.getElementById('ptDate').valueAsDate = new Date();
+  restoreFolder(); // Restore save folder from memory
+  renderTabs();
+  renderPanels();
+  updateSummary();
+}
+
+function renderTabs() {
+  const container = document.getElementById('taskTabs');
+  let html = '';
+  tasks.forEach((t, index) => {
+    const assessed = t.levels.filter(l => getState(t.id, l.num, 'ans')).length;
+    const activeClass = index === 0 ? 'active' : '';
+    html += `<button class="tab-btn ${activeClass}" data-task="${t.id}" onclick="switchTask('${t.id}')">${t.name} <span class="count">${assessed}/5</span></button>`;
+  });
+  html += `<button class="tab-btn" data-task="summary" onclick="switchTask('summary')">📊 Summary</button>`;
+  container.innerHTML = html;
+}
+
+function switchTask(taskId) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (taskId === 'summary') { document.getElementById('panel-summary').classList.add('active'); updateSummary(); }
+  else { document.getElementById('panel-'+taskId).classList.add('active'); }
+  document.querySelector(`[data-task="${taskId}"]`).classList.add('active');
+}
+
+function renderPanels() {
+  const container = document.getElementById('panelsContainer');
+  container.innerHTML = '';
+  tasks.forEach((t, tIdx) => {
+    const panel = document.createElement('div');
+    panel.id = 'panel-'+t.id;
+    panel.className = 'panel ' + (tIdx === 0 ? 'active' : '');
+    let levelsHtml = '';
+    t.levels.forEach(l => {
+      const ans = getState(t.id, l.num, 'ans') || '';
+      const diffs = getArr(t.id, l.num, 'diff');
+      const assists = getArr(t.id, l.num, 'assist');
+      const dep = getState(t.id, l.num, 'dep');
+      const ind = getState(t.id, l.num, 'ind');
+      const c2r = getState(t.id, l.num, 'c2r');
+      const badgeClass = ans==='Yes'?'status-yes':ans==='Partial'?'status-partial':ans==='No'?'status-no':'';
+      levelsHtml += `
+        <div class="level-card">
+          <div class="level-top">
+            <div class="level-badge-row">
+              <div class="level-identity"><span class="level-num">${l.num}</span><span class="level-name">${l.name}</span></div>
+              <span class="badge-status ${badgeClass}">${ans || 'Not assessed'}</span>
+            </div>
+            <div class="level-stmt">${l.stmt}</div>
+          </div>
+          <div class="level-content">
+            <div class="field" style="margin-bottom:20px"><label>Assessment Answer</label>
+              <select onchange="setAnswer('${t.id}',${l.num},this.value)">
+                <option value="" ${ans===''?'selected':''}>— Select One —</option>
+                <option value="Yes" ${ans==='Yes'?'selected':''}>✅ Yes (Independent)</option>
+                <option value="Partial" ${ans==='Partial'?'selected':''}>⚠️ Partial (Requires Support)</option>
+                <option value="No" ${ans==='No'?'selected':''}>❌ No (Dependent)</option>
+              </select>
+            </div>
+            <div class="choice-group"><label>☑️ Difficulties Noted</label><div class="cb-list">${difficultyOptions.map(d => {
+                  const checked = diffs.includes(d) ? 'checked' : '';
+                  return `<label class="cb-item ${checked}"><input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleDiff('${t.id}',${l.num},'${d.replace(/'/g, "\\'")}')"><span>${d}</span></label>`;
+                }).join('')}</div></div>
+            <div class="choice-group"><label>☑️ Assistance Required</label><div class="cb-list">${assistanceOptions.map(a => {
+                  const checked = assists.includes(a) ? 'checked' : '';
+                  return `<label class="cb-item ${checked}"><input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleAssist('${t.id}',${l.num},'${a.replace(/'/g, "\\'")}')"><span>${a}</span></label>`;
+                }).join('')}</div></div>
+            <div class="calc-grid">
+              <div class="calc-box"><span class="v">${dep !== undefined ? (dep * 100).toFixed(0) : '—'}%</span><span class="l">Dep.</span></div>
+              <div class="calc-box"><span class="v">${ind !== undefined ? (ind * 100).toFixed(0) : '—'}%</span><span class="l">Indep.</span></div>
+              <div class="calc-box"><span class="v">${c2r !== undefined ? (c2r * 100).toFixed(0) : '—'}%</span><span class="l">C2R</span></div>
+            </div>
+          </div>
+        </div>`;
+    });
+    panel.innerHTML = `<div class="task-header"><h2>${t.name} Performance</h2>
+        <div class="task-meta-grid">
+          <div class="meta-card"><span class="meta-val" id="meta-ach-${t.id}">—</span><span class="meta-label">Achieved</span></div>
+          <div class="meta-card"><span class="meta-val" id="meta-train-${t.id}">—</span><span class="meta-label">To Train</span></div>
+          <div class="meta-card"><span class="meta-val" id="meta-dep-${t.id}">—</span><span class="meta-label">Avg Dep</span></div>
+          <div class="meta-card"><span class="meta-val" id="meta-ind-${t.id}">—</span><span class="meta-label">Avg Ind</span></div>
+          <div class="meta-card"><span class="meta-val" id="meta-c2r-${t.id}">—</span><span class="meta-label">Avg C2R</span></div>
+        </div>
+      </div><div style="margin-top: 12px;">${levelsHtml}</div>`;
+    container.appendChild(panel);
+  });
+}
+
+function setAnswer(taskId, levelNum, value) { setState(taskId, levelNum, 'ans', value); autoCalc(taskId, levelNum); renderPanels(); renderTabs(); updateTaskMeta(taskId); }
+function toggleDiff(taskId, levelNum, value) { toggleArr(taskId, levelNum, 'diff', value); autoCalc(taskId, levelNum); renderPanels(); updateTaskMeta(taskId); }
+function toggleAssist(taskId, levelNum, value) { toggleArr(taskId, levelNum, 'assist', value); autoCalc(taskId, levelNum); renderPanels(); updateTaskMeta(taskId); }
+
+function autoCalc(taskId, levelNum) {
+  const diffs = getArr(taskId, levelNum, 'diff');
+  const assists = getArr(taskId, levelNum, 'assist');
+  const dep = diffs.length / 5;
+  const ind = 1 - dep;
+  const c2r = 1 - (assists.length / 5);
+  setState(taskId, levelNum, 'dep', parseFloat(dep.toFixed(2)));
+  setState(taskId, levelNum, 'ind', parseFloat(ind.toFixed(2)));
+  setState(taskId, levelNum, 'c2r', parseFloat(c2r.toFixed(2)));
+}
+
+function updateTaskMeta(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  const levels = task.levels;
+  let achieved = 0, trainLevel = null;
+  for (let i = levels.length - 1; i >= 0; i--) { if (getState(taskId, levels[i].num, 'ans') === 'Yes') { achieved = levels[i].num; break; } }
+  for (let i = 0; i < levels.length; i++) { const ans = getState(taskId, levels[i].num, 'ans'); if (ans && ans !== 'Yes') { trainLevel = levels[i].name; break; } }
+  if (!trainLevel && achieved < 5) { const next = levels.find(l => l.num === achieved + 1); if (next) trainLevel = next.name; }
+  let depSum = 0, indSum = 0, c2rSum = 0, count = 0;
+  levels.forEach(l => {
+    const dep = parseFloat(getState(taskId, l.num, 'dep'));
+    if (!isNaN(dep)) { depSum += dep; indSum += parseFloat(getState(taskId, l.num, 'ind')); c2rSum += parseFloat(getState(taskId, l.num, 'c2r')); count++; }
+  });
+  if (document.getElementById('meta-ach-'+taskId)) document.getElementById('meta-ach-'+taskId).textContent = achieved > 0 ? 'L' + achieved : '—';
+  if (document.getElementById('meta-train-'+taskId)) document.getElementById('meta-train-'+taskId).textContent = trainLevel || '—';
+  if (document.getElementById('meta-dep-'+taskId)) document.getElementById('meta-dep-'+taskId).textContent = count ? (depSum/count).toFixed(2) : '—';
+}
+
+function updateSummary() {
+  let totalTasks = 0, totalDep = 0, totalInd = 0, totalC2R = 0, totalCount = 0;
+  const tbody = document.getElementById('summaryBody');
+  let html = '';
+  tasks.forEach(t => {
+    const assessed = t.levels.filter(l => getState(t.id, l.num, 'ans')).length;
+    if (assessed > 0) totalTasks++;
+    let depSum = 0, indSum = 0, c2rSum = 0, count = 0, achieved = 0, trainLevel = '—';
+    for (let i = t.levels.length - 1; i >= 0; i--) { if (getState(t.id, t.levels[i].num, 'ans') === 'Yes') { achieved = t.levels[i].num; break; } }
+    for (let i = 0; i < t.levels.length; i++) { const ans = getState(t.id, t.levels[i].num, 'ans'); if (ans && ans !== 'Yes') { trainLevel = t.levels[i].name; break; } }
+    t.levels.forEach(l => {
+      const dep = parseFloat(getState(t.id, l.num, 'dep'));
+      if (!isNaN(dep)) { depSum += dep; count++; totalDep += dep; totalCount++; totalInd += parseFloat(getState(t.id, l.num, 'ind')); totalC2R += parseFloat(getState(t.id, l.num, 'c2r')); }
+    });
+    html += `<tr><td><strong>${t.name}</strong></td><td>${achieved > 0 ? 'Level ' + achieved : '—'}</td><td>${trainLevel}</td><td>${count ? (depSum/count).toFixed(2) : '—'}</td><td>${count ? (getState(t.id, 1, 'ind') !== undefined ? (totalInd/totalCount).toFixed(2) : '—') : '—'}</td><td>${count ? (totalC2R/totalCount).toFixed(2) : '—'}</td></tr>`;
+  });
+  tbody.innerHTML = html;
+  document.getElementById('sum-tasks').textContent = totalTasks;
+  document.getElementById('sum-avg-dep').textContent = totalCount ? (totalDep/totalCount).toFixed(2) : '—';
+}
+
+/** 
+ * PDF GENERATION WITH AUTO-SAVE FOLDER
+ */
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const ptName = (document.getElementById('ptName').value || 'Patient').trim();
+  const ptDate = document.getElementById('ptDate').value || new Date().toLocaleDateString();
+
+  const sectionHeader = (txt, y) => {
+    doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(37, 99, 235);
+    doc.text(txt, 14, y); doc.setDrawColor(226, 232, 240); doc.line(14, y + 2, 196, y + 2);
+    return y + 10;
+  };
+
+  doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(15, 23, 42);
+  doc.text("FIL Quick Sorter Report", 14, 20);
+  doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
+
+  const ptInfo = [
+    ["Patient Name:", ptName, "UID / MRN:", document.getElementById('ptId').value || "—"],
+    ["Assessor:", document.getElementById('ptAssessor').value || "—", "Date:", ptDate],
+    ["Therapist Overall FIL:", document.getElementById('filTherapist').value || "—", "", ""]
+  ];
+
+  doc.autoTable({ startY: 32, body: ptInfo, theme: 'plain', styles: { fontSize: 10, cellPadding: 2 }, columnStyles: { 0: { fontStyle: 'bold', width: 40 }, 2: { fontStyle: 'bold', width: 40 } } });
+
+  let currentY = sectionHeader("Summary Matrix", doc.lastAutoTable.finalY + 10);
+  const summaryRows = tasks.map(t => {
+    let achieved = 0, train = '—', dep = 0, count = 0;
+    for (let i = t.levels.length - 1; i >= 0; i--) { if (getState(t.id, t.levels[i].num, 'ans') === 'Yes') { achieved = t.levels[i].num; break; } }
+    for (let i = 0; i < t.levels.length; i++) { const ans = getState(t.id, t.levels[i].num, 'ans'); if (ans && ans !== 'Yes') { train = t.levels[i].name; break; } }
+    t.levels.forEach(l => { const d = parseFloat(getState(t.id, l.num, 'dep')); if (!isNaN(d)) { dep += d; count++; } });
+    return [t.name, achieved > 0 ? 'Level ' + achieved : '—', train, count ? (dep/count).toFixed(2) : '—', count ? (1-(dep/count)).toFixed(2) : '—', '—'];
+  });
+
+  doc.autoTable({ startY: currentY, head: [['Task', 'FIL Achieved', 'FIL to Train', 'Avg Dep', 'Avg Ind', 'Avg C2R']], body: summaryRows, headStyles: { fillColor: [37, 99, 235], textColor: 255 }, styles: { fontSize: 9 } });
+
+  tasks.forEach(t => {
+    doc.addPage(); sectionHeader(`${t.name} - Detailed Assessment`, 20);
+    const taskDetails = [];
+    t.levels.forEach(l => {
+      const ans = getState(t.id, l.num, 'ans') || 'Not Assessed';
+      const dep = getState(t.id, l.num, 'dep');
+      taskDetails.push([{ content: `L${l.num}: ${l.name}`, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: ans, styles: { fontStyle: 'bold', fillColor: [241, 245, 249] } }, { content: `Dep: ${!isNaN(dep)?(dep*100).toFixed(0)+'%':'—'}`, styles: { fillColor: [241, 245, 249], halign: 'right' } }]);
+      taskDetails.push([{ content: `Question: ${l.stmt}\nDifficulties: ${getArr(t.id, l.num, 'diff').join(', ') || 'None'}\nAssistance: ${getArr(t.id, l.num, 'assist').join(', ') || 'None'}`, colSpan: 3, styles: { fontSize: 8, textColor: [71, 85, 105] } }]);
+    });
+    doc.autoTable({ startY: 30, body: taskDetails, theme: 'grid', styles: { cellPadding: 3, overflow: 'linebreak' }, columnStyles: { 0: { width: 100 }, 1: { width: 40 }, 2: { width: 40 } } });
+  });
+
+  doc.addPage(); currentY = sectionHeader("Clinical Notes & Recommendations", 20);
+  doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(15, 23, 42);
+  doc.text(document.getElementById('clinicalNotes').value || "No additional clinical notes.", 14, currentY, { maxWidth: 180 });
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) { doc.setPage(i); doc.setFontSize(8); doc.text(`Page ${i} of ${pageCount} | Patient: ${ptName}`, 14, 285); }
+
+  const filename = `FIL_${ptName.replace(/\s+/g, '_')}_${ptDate}.pdf`;
+
+  // --- SAVE LOGIC ---
+  if (saveDirHandle) {
+    try {
+      const opts = { mode: 'readwrite' };
+      if (await saveDirHandle.queryPermission(opts) !== 'granted') {
+        if (await saveDirHandle.requestPermission(opts) !== 'granted') throw new Error("Permission denied");
+      }
+      const fileHandle = await saveDirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(doc.output('blob'));
+      await writable.close();
+      showToast(`Saved to folder ✓`);
+      return;
+    } catch (err) { console.warn("Folder save failed, downloading normally.", err); }
+  }
+
+  doc.save(filename);
+  showToast("PDF Downloaded ✓");
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
