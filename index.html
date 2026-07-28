@@ -659,21 +659,35 @@ async function generatePDF() {
 
   const filename = `FIL_${ptName.replace(/\s+/g, '_')}_${ptDate}.pdf`;
 
-  // --- SAVE LOGIC ---
-  if (saveDirHandle) {
-    try {
-      const opts = { mode: 'readwrite' };
-      if (await saveDirHandle.queryPermission(opts) !== 'granted') {
-        if (await saveDirHandle.requestPermission(opts) !== 'granted') throw new Error("Permission denied");
-      }
-      const fileHandle = await saveDirHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(doc.output('blob'));
-      await writable.close();
-      showToast(`Saved to folder ✓`);
-      return;
-    } catch (err) { console.warn("Folder save failed, downloading normally.", err); }
-  }
+// Create PDF Blob
+const pdfBlob = doc.output("blob");
+
+try {
+
+    showToast("Uploading report...");
+
+    const result = await uploadPDFToDrive(pdfBlob, filename);
+
+    if (result.success) {
+
+        showToast("Uploaded to Google Drive ✓");
+
+    } else {
+
+        throw new Error(result.error);
+
+    }
+
+} catch (err) {
+
+    console.error(err);
+
+    showToast("Upload failed");
+
+}
+
+// Always keep a local copy
+doc.save(filename);
 
   doc.save(filename);
   showToast("PDF Downloaded ✓");
