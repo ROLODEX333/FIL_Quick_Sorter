@@ -28,6 +28,12 @@
     .folder-btn{padding:12px;font-size:.85rem;font-weight:600;border:1px dashed var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:var(--radius-sm);cursor:pointer;text-align:left}
     .global-fil{background:var(--accent-soft);padding:16px;border-radius:var(--radius-md);margin-bottom:20px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--accent)}
     .global-fil label{font-weight:700;color:var(--accent);font-size:.9rem}
+    .initial-selection{background:var(--card);padding:20px;border-radius:var(--radius-md);box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:20px}
+    .initial-selection h2{font-size:1.05rem;margin:0 0 6px;color:var(--accent)}
+    .initial-selection p{font-size:.8rem;color:var(--text-muted);margin:0 0 14px}
+    .initial-selection .cb-list{display:flex;flex-direction:column;gap:8px}
+    .selection-message{margin:14px 0 0;padding:10px 12px;border-radius:var(--radius-sm);background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-size:.85rem}
+    .tab-btn:disabled{cursor:not-allowed;opacity:.5;background:#f1f5f9;color:var(--text-muted);border-style:dashed}
     .tabs-container{position:sticky;top:0;background:var(--bg);z-index:50;margin:0 -16px 20px;padding:10px 16px;border-bottom:1px solid var(--border)}
     .tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
     .tabs::-webkit-scrollbar{display:none}
@@ -85,7 +91,7 @@
     .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:12px 24px;border-radius:100px;font-size:.875rem;opacity:0;pointer-events:none;transition:opacity .3s;z-index:1000;text-align:center;max-width:calc(100vw - 32px)}
     .toast.show{opacity:1}
     @media (min-width:768px){
-      .patient-bar{grid-template-columns:2fr 1fr 1fr}.task-meta-grid{grid-template-columns:repeat(5,1fr)}
+      .patient-bar{grid-template-columns:2fr 1fr 1fr}.task-meta-grid{grid-template-columns:repeat(3,1fr)}
       .cb-list{display:grid;grid-template-columns:1fr 1fr}.global-fil{flex-direction:row;align-items:center}
       .global-fil input{width:240px;margin-left:auto}.tabs-container{position:static;padding:0;border:none;margin-bottom:20px}
       .tabs{flex-wrap:wrap;overflow-x:visible}.summary-info{grid-template-columns:repeat(4,1fr)}
@@ -115,6 +121,12 @@
       <label for="filTherapist">🎯 FIL Overall (Therapist Judgement):</label>
       <input id="filTherapist" placeholder="e.g. FIL 3">
     </section>
+    <section class="initial-selection" aria-labelledby="task-selection-title">
+      <h2 id="task-selection-title">Which of the Tasks below has the Patient attempted to perform post Injury</h2>
+      <p>Select one or multiple tasks. Only selected tasks will be enabled for assessment.</p>
+      <div class="cb-list" id="initialTaskSelection"></div>
+      <div class="selection-message" id="selectionMessage">Please select at least one task to continue.</div>
+    </section>
     <div class="tabs-container"><nav class="tabs" id="taskTabs" aria-label="Assessment tasks"></nav></div>
     <div id="panelsContainer"></div>
     <section id="panel-summary" class="panel">
@@ -122,9 +134,9 @@
         <h2>📊 Assessment Summary</h2>
         <div class="task-meta-grid">
           <div class="meta-card"><span class="meta-val" id="sum-tasks">0/9</span><span class="meta-label">Tasks Completed</span></div>
-          <div class="meta-card"><span class="meta-val" id="sum-overall-dep">—</span><span class="meta-label">Overall Dep %</span></div>
-          <div class="meta-card"><span class="meta-val" id="sum-overall-ind">—</span><span class="meta-label">Overall Ind %</span></div>
-          <div class="meta-card"><span class="meta-val" id="sum-overall-c2r">—</span><span class="meta-label">Overall C2R</span></div>
+          <div class="meta-card"><span class="meta-val" id="sum-overall-independency">—</span><span class="meta-label">Overall Independency</span></div>
+          <div class="meta-card"><span class="meta-val" id="sum-overall-c2r-percent">—</span><span class="meta-label">Overall C2R %</span></div>
+          <div class="meta-card"><span class="meta-val" id="sum-overall-ratio">—</span><span class="meta-label">Overall Compensation:Restoration</span></div>
           <div class="meta-card"><span class="meta-val" id="sum-fil">—</span><span class="meta-label">Therapist FIL</span></div>
         </div>
       </div>
@@ -136,7 +148,7 @@
       </div>
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Task</th><th>FIL Achieved</th><th>To Train</th><th>Dep %</th><th>Ind %</th><th>C2R</th></tr></thead>
+          <thead><tr><th>Task</th><th>FIL Achieved</th><th>To Train</th><th>Independency</th><th>C2R %</th><th>Compensation:Restoration</th></tr></thead>
           <tbody id="summaryBody"></tbody>
         </table>
       </div>
@@ -237,12 +249,13 @@
       ['Confidence — Not confident, avoids it, or cannot manage in new places','The person hesitates, feels anxious, avoids the task, or cannot perform the task outside familiar environments.']
     ];
     const state = {};
-    let currentTaskId = tasks[0].id;
+    const selectedTasks = new Set();
+    let currentTaskId = 'summary';
     let clickCount = 0;
 
     function initState() {
       tasks.forEach(t => {
-        state[t.id] = {answer:{},diff:[],assist:[]};
+        state[t.id] = {answer:{},diff:[],assist:[],notes:''};
         t.levels.forEach(l => state[t.id].answer[l.num] = '');
       });
     }
@@ -250,11 +263,20 @@
     function metrics(id) {
       const s = taskState(id);
       const dep = s.diff.length / 5;
-      const ind = 1 - dep;
-      const assistanceCount = s.assist.length;
-      const independentCount = 5 - assistanceCount;
-      return {dep,ind,assistanceCount,independentCount,c2rDisplay:`${independentCount}:${assistanceCount}`};
+      const independency = 1 - dep;
+      const compensationCount = s.assist.length;
+      const restorationCount = 5 - compensationCount;
+      return {
+        dep,
+        independency,
+        independenceCount: 5 - s.diff.length,
+        compensationCount,
+        restorationCount,
+        c2rPercent: restorationCount / 5,
+        c2rDisplay:`${compensationCount}:${restorationCount}`
+      };
     }
+    function isApplicable(id){return selectedTasks.has(id)}
     function started(id) {
       const s = taskState(id);
       return Object.values(s.answer).some(Boolean) || s.diff.length > 0 || s.assist.length > 0;
@@ -265,10 +287,18 @@
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function renderInitialTaskSelection() {
+      document.getElementById('initialTaskSelection').innerHTML = tasks.map(t => {
+        const checked = isApplicable(t.id);
+        return `<label class="cb-item ${checked?'checked':''}"><input type="checkbox" ${checked?'checked':''} onchange="toggleTaskSelection('${t.id}',this.checked)"><span>${escapeHtml(t.name)}</span></label>`;
+      }).join('');
+      document.getElementById('selectionMessage').style.display = selectedTasks.size ? 'none' : 'block';
+    }
     function renderTabs() {
       const html = tasks.map(t => {
+        const applicable = isApplicable(t.id);
         const count = Object.values(taskState(t.id).answer).filter(Boolean).length;
-        return `<button class="tab-btn ${currentTaskId===t.id?'active':''}" data-task="${t.id}" onclick="switchTask('${t.id}')">${escapeHtml(t.name)} <span class="count">${count}/5</span></button>`;
+        return `<button class="tab-btn ${currentTaskId===t.id?'active':''}" data-task="${t.id}" ${applicable?`onclick="switchTask('${t.id}')"`:'disabled aria-disabled="true"'}>${escapeHtml(t.name)} <span class="count">${applicable?`${count}/5`:'Not Applicable'}</span></button>`;
       }).join('');
       document.getElementById('taskTabs').innerHTML = html + `<button class="tab-btn ${currentTaskId==='summary'?'active':''}" data-task="summary" onclick="switchTask('summary')">📊 Summary</button>`;
     }
@@ -285,7 +315,7 @@
     function renderPanels() {
       const container = document.getElementById('panelsContainer');
       container.innerHTML = tasks.map(t => {
-        const s = taskState(t.id), m = metrics(t.id), report = taskReport(t.id);
+        const s = taskState(t.id), m = metrics(t.id), report = taskReport(t.id), applicable = isApplicable(t.id);
         const levels = t.levels.map(l => {
           const ans = s.answer[l.num] || '';
           const badge = ans ? `<span class="badge-status ${ans==='Yes'?'status-yes':ans==='Partial'?'status-partial':'status-no'}">${ans}</span>` : '<span class="badge-status">Not assessed</span>';
@@ -297,16 +327,17 @@
           </article>`;
         }).join('');
         const defs = definitions.map(d => `<p><strong>${escapeHtml(d[0])}</strong> ${escapeHtml(d[1])}</p>`).join('');
-        return `<section id="panel-${t.id}" class="panel ${currentTaskId===t.id?'active':''}">
+        return `<section id="panel-${t.id}" class="panel ${applicable && currentTaskId===t.id?'active':''}">
           <div class="task-header"><h2>${escapeHtml(t.name)} Performance</h2><p class="task-instruction">Use current functioning over the last 1–2 weeks. If functioning fluctuates, classify using the safer/lower level.</p>
-            <div class="task-meta-grid"><div class="meta-card"><span class="meta-val">${report.achieved ? 'FIL '+report.achieved : '—'}</span><span class="meta-label">Achieved</span></div>
-            <div class="meta-card"><span class="meta-val">${report.toTrain}</span><span class="meta-label">To Train</span></div><div class="meta-card"><span class="meta-val">${started(t.id)?formatPercent(m.dep):'—'}</span><span class="meta-label">Dep</span></div>
-            <div class="meta-card"><span class="meta-val">${started(t.id)?formatPercent(m.ind):'—'}</span><span class="meta-label">Ind</span></div><div class="meta-card"><span class="meta-val">${started(t.id)?m.c2rDisplay:'—'}</span><span class="meta-label">C2R</span></div></div>
+            <div class="task-meta-grid"><div class="meta-card"><span class="meta-val">${report.achieved === null ? 'Not Applicable' : report.achieved === 0 ? 'FIL 0' : 'FIL '+report.achieved}</span><span class="meta-label">Achieved</span></div>
+            <div class="meta-card"><span class="meta-val">${report.toTrain}</span><span class="meta-label">To Train</span></div><div class="meta-card"><span class="meta-val">${applicable?formatPercent(m.independency):'Not Applicable'}</span><span class="meta-label">Independency</span></div>
+            <div class="meta-card"><span class="meta-val">${applicable?formatPercent(m.c2rPercent):'Not Applicable'}</span><span class="meta-label">C2R %</span></div><div class="meta-card"><span class="meta-val">${applicable?m.c2rDisplay:'Not Applicable'}</span><span class="meta-label">Compensation:Restoration</span></div></div>
           </div><div style="margin-top:12px">${levels}</div>
           <div class="followup-card"><h3>Standard Follow-Up</h3><p class="hint">Selecting none of the above means the person has no difficulty completing the task.</p>
             <div class="choice-group"><label>Difficulty</label><div class="cb-list">${difficultyOptions.map((x,i)=>checkOption(t.id,'diff',i,x)).join('')}</div></div>
             <div class="choice-group"><label>Assistance Required</label><div class="cb-list">${assistanceOptions.map((x,i)=>checkOption(t.id,'assist',i,x)).join('')}</div></div>
-            <div class="calc-grid"><div class="calc-box"><span class="v">${started(t.id)?formatPercent(m.dep):'—'}</span><span class="l">Dep.</span></div><div class="calc-box"><span class="v">${started(t.id)?formatPercent(m.ind):'—'}</span><span class="l">Indep.</span></div><div class="calc-box"><span class="v">${started(t.id)?m.c2rDisplay:'—'}</span><span class="l">C2R Independent:Assisted</span></div></div>
+            <div class="calc-grid"><div class="calc-box"><span class="v">${applicable?formatPercent(m.independency):'Not Applicable'}</span><span class="l">Independency</span></div><div class="calc-box"><span class="v">${applicable?formatPercent(m.c2rPercent):'Not Applicable'}</span><span class="l">C2R %</span></div><div class="calc-box"><span class="v">${applicable?m.c2rDisplay:'Not Applicable'}</span><span class="l">Compensation:Restoration</span></div></div>
+            <div class="field" style="margin-top:20px"><label for="notes-${t.id}">Notes</label><textarea id="notes-${t.id}" rows="4" oninput="setTaskNotes('${t.id}',this.value)" placeholder="Task-specific notes...">${escapeHtml(s.notes)}</textarea></div>
             <details class="definitions"><summary>Definitions of options</summary>${defs}</details>
           </div>
         </section>`;
@@ -314,11 +345,25 @@
       document.getElementById('panel-summary').classList.toggle('active',currentTaskId==='summary');
     }
     function switchTask(id) {
+      if(id !== 'summary' && !isApplicable(id)) return;
       currentTaskId = id;
       renderTabs();
       renderPanels();
-      if(id==='summary') updateSummary();
+      updateSummary();
       window.scrollTo({top:0,behavior:'smooth'});
+    }
+    function toggleTaskSelection(taskId, checked) {
+      if(checked) {
+        selectedTasks.add(taskId);
+        if(currentTaskId === 'summary') currentTaskId = taskId;
+      } else {
+        selectedTasks.delete(taskId);
+        if(currentTaskId === taskId) currentTaskId = selectedTasks.size ? [...selectedTasks][0] : 'summary';
+      }
+      renderInitialTaskSelection();
+      renderTabs();
+      renderPanels();
+      updateSummary();
     }
     function setAnswer(taskId, level, value) {
       taskState(taskId).answer[level] = value;
@@ -334,12 +379,19 @@
       if(i >= 0) a.splice(i,1); else a.push(index);
       rerender(taskId);
     }
+    function setTaskNotes(taskId, value) {
+      taskState(taskId).notes = value;
+      updateSummary();
+    }
     function rerender(taskId) {
       renderTabs(); renderPanels();
-      if(currentTaskId==='summary') updateSummary();
+      updateSummary();
     }
     function taskReport(taskId) {
+      if(!isApplicable(taskId)) return {achieved:null,toTrain:'Not Applicable'};
       const t = tasks.find(x=>x.id===taskId), answers = taskState(taskId).answer;
+      if(!Object.values(answers).some(Boolean)) return {achieved:null,toTrain:'—'};
+      if(answers[1] === 'Partial' || answers[1] === 'No') return {achieved:0,toTrain:'FIL 1'};
       const yesLevels = t.levels.filter(l=>answers[l.num]==='Yes').map(l=>l.num);
       const achieved = yesLevels.length ? Math.max(...yesLevels) : 0;
       const next = achieved < 5 ? t.levels.find(l=>l.num === (achieved + 1)) : null;
@@ -349,17 +401,26 @@
     function formatDate(value){if(!value)return '—';const d=new Date(`${value}T00:00:00`);return Number.isNaN(d.getTime())?value:d.toLocaleDateString()}
     function updateSummary() {
       const tbody = document.getElementById('summaryBody');
-      let rows='', totalDep=0,totalLevels=0,totalIndependent=0,totalAssisted=0,completeCount=0;
+      let rows='', totalIndependence=0,totalSlots=0,totalCompensation=0,totalRestoration=0,completeCount=0;
       tasks.forEach(t => {
-        const m=metrics(t.id), r=taskReport(t.id), isStarted=started(t.id);
-        if(completed(t.id)){completeCount++;totalDep+=m.dep;totalLevels++;totalIndependent+=m.independentCount;totalAssisted+=m.assistanceCount}
-        rows += `<tr><td><strong>${escapeHtml(t.name)}</strong></td><td>${r.achieved?'FIL '+r.achieved:'—'}</td><td>${r.toTrain}</td><td>${isStarted?formatPercent(m.dep):'—'}</td><td>${isStarted?formatPercent(m.ind):'—'}</td><td>${isStarted?m.c2rDisplay:'—'}</td></tr>`;
+        const m=metrics(t.id), r=taskReport(t.id);
+        if(isApplicable(t.id)){
+          totalIndependence += m.independenceCount;
+          totalSlots += 5;
+          totalCompensation += m.compensationCount;
+          totalRestoration += m.restorationCount;
+          if(completed(t.id)) completeCount++;
+          const achieved = r.achieved === 0 ? 'FIL 0' : r.achieved ? 'FIL '+r.achieved : '—';
+          rows += `<tr><td><strong>${escapeHtml(t.name)}</strong></td><td>${achieved}</td><td>${r.toTrain}</td><td>${formatPercent(m.independency)}</td><td>${formatPercent(m.c2rPercent)}</td><td>${m.c2rDisplay}</td></tr>`;
+        } else {
+          rows += `<tr><td><strong>${escapeHtml(t.name)}</strong></td><td>Not Applicable</td><td>Not Applicable</td><td>Not Applicable</td><td>Not Applicable</td><td>Not Applicable</td></tr>`;
+        }
       });
       tbody.innerHTML=rows;
-      document.getElementById('sum-tasks').textContent=`${completeCount}/${tasks.length}`;
-      document.getElementById('sum-overall-dep').textContent=totalLevels?formatPercent(totalDep/totalLevels):'—';
-      document.getElementById('sum-overall-ind').textContent=totalLevels?formatPercent(1-(totalDep/totalLevels)):'—';
-      document.getElementById('sum-overall-c2r').textContent=totalLevels?`${totalIndependent}:${totalAssisted}`:'—';
+      document.getElementById('sum-tasks').textContent=`${completeCount}/${selectedTasks.size}`;
+      document.getElementById('sum-overall-independency').textContent=totalSlots?formatPercent(totalIndependence/totalSlots):'—';
+      document.getElementById('sum-overall-c2r-percent').textContent=totalSlots?formatPercent(totalRestoration/(totalCompensation+totalRestoration)):'—';
+      document.getElementById('sum-overall-ratio').textContent=totalSlots?`${totalCompensation}:${totalRestoration}`:'—';
       document.getElementById('sum-fil').textContent=document.getElementById('filTherapist').value.trim()||'—';
       document.getElementById('sum-patient').textContent=document.getElementById('ptName').value.trim()||'—';
       document.getElementById('sum-uid').textContent=document.getElementById('ptId').value.trim()||'—';
@@ -379,7 +440,18 @@
       try{if(saveDirHandle.requestPermission){const p=await saveDirHandle.requestPermission({mode:'readwrite'});if(p!=='granted')return false}const file=await saveDirHandle.getFileHandle(filename,{create:true});const writable=await file.createWritable();await writable.write(blob);await writable.close();return true}catch(e){console.warn('Selected-folder save failed',e);return false}
     }
     function validatePatient(){const ids=['ptName','ptId','ptDate'];let first=null;ids.forEach(id=>{const el=document.getElementById(id),valid=Boolean(el.value.trim());el.setAttribute('aria-invalid',valid?'false':'true');if(!valid&&!first)first=el});if(first){first.focus();showToast('Enter Patient Name, UID, and Assessment Date');return false}return true}
-    function summaryData(){return tasks.map(t=>{const m=metrics(t.id),r=taskReport(t.id);return {task:t.name,achieved:r.achieved?`FIL ${r.achieved}`:'—',train:r.toTrain,dep:started(t.id)?formatPercent(m.dep):'—',ind:started(t.id)?formatPercent(m.ind):'—',c2r:started(t.id)?m.c2rDisplay:'—'}})}
+    function summaryData(){return tasks.map(t=>{
+      const m=metrics(t.id),r=taskReport(t.id);
+      if(!isApplicable(t.id)) return {task:t.name,achieved:'Not Applicable',train:'Not Applicable',independency:'Not Applicable',c2rPercent:'Not Applicable',ratio:'Not Applicable'};
+      return {
+        task:t.name,
+        achieved:r.achieved===0?'FIL 0':r.achieved?`FIL ${r.achieved}`:'—',
+        train:r.toTrain,
+        independency:formatPercent(m.independency),
+        c2rPercent:formatPercent(m.c2rPercent),
+        ratio:m.c2rDisplay
+      };
+    })}
 
     async function generatePDF(){
       if(!validatePatient())return;
@@ -387,19 +459,31 @@
       const {jsPDF}=window.jspdf,doc=new jsPDF('p','mm','a4');
       const ptName=document.getElementById('ptName').value.trim(),ptId=document.getElementById('ptId').value.trim(),ptDate=document.getElementById('ptDate').value,assessor=document.getElementById('ptAssessor').value.trim()||'—',fil=document.getElementById('filTherapist').value.trim()||'—';
       const filename=`FIL_${ptName.replace(/[^a-z0-9]+/gi,'_')}_${ptDate}.pdf`;
+      const applicableTasks=tasks.filter(t=>isApplicable(t.id));
       const heading=(text,y)=>{doc.setFontSize(14);doc.setFont('helvetica','bold');doc.setTextColor(37,99,235);doc.text(text,14,y);doc.setDrawColor(226,232,240);doc.line(14,y+2,196,y+2);return y+10};
       doc.setFontSize(22);doc.setFont('helvetica','bold');doc.setTextColor(15,23,42);doc.text('FIL Quick Sorter Report',14,20);
       doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100,116,139);doc.text(`Generated: ${new Date().toLocaleString()}`,14,26);
-      doc.autoTable({startY:32,body:[['Patient Name:',ptName,'UID:',ptId],['Assessor:',assessor,'Date:',formatDate(ptDate)],['Therapist Overall FIL:',fil,'','']],theme:'plain',styles:{fontSize:10,cellPadding:2},columnStyles:{0:{fontStyle:'bold',width:42},2:{fontStyle:'bold',width:30}}});
+      doc.autoTable({startY:32,body:[['Patient Name:',ptName,'UID:',ptId],['Assessor:',assessor,'Date:',formatDate(ptDate)],['Therapist Overall FIL:',fil,'',''],['Selected Tasks:',applicableTasks.map(t=>t.name).join(', ')||'None','','']],theme:'plain',styles:{fontSize:10,cellPadding:2},columnStyles:{0:{fontStyle:'bold',width:42},2:{fontStyle:'bold',width:30}}});
       let y=heading('Summary Matrix',doc.lastAutoTable.finalY+10),rows=summaryData();
-      const complete=tasks.filter(t=>completed(t.id)),totalInd=complete.reduce((n,t)=>n+metrics(t.id).independentCount,0),totalAssist=complete.reduce((n,t)=>n+metrics(t.id).assistanceCount,0),depAvg=complete.length?complete.reduce((n,t)=>n+metrics(t.id).dep,0)/complete.length:null;
-      doc.autoTable({startY:y,head:[['Task','FIL Achieved','To Train','Dep %','Ind %','C2R']],body:rows.map(r=>[r.task,r.achieved,r.train,r.dep,r.ind,r.c2r]),headStyles:{fillColor:[37,99,235],textColor:255},styles:{fontSize:8}});
-      y=doc.lastAutoTable.finalY+8;doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(15,23,42);doc.text(`Overall Dep: ${depAvg===null?'—':formatPercent(depAvg)}    Overall Ind: ${depAvg===null?'—':formatPercent(1-depAvg)}    Overall C2R: ${complete.length?`${totalInd}:${totalAssist}`:'—'}`,14,y);
+      const totalIndependence=applicableTasks.reduce((n,t)=>n+metrics(t.id).independenceCount,0);
+      const totalSlots=applicableTasks.length*5;
+      const totalCompensation=applicableTasks.reduce((n,t)=>n+metrics(t.id).compensationCount,0);
+      const totalRestoration=applicableTasks.reduce((n,t)=>n+metrics(t.id).restorationCount,0);
+      doc.autoTable({startY:y,head:[['Task','FIL Achieved','To Train','Independency','C2R %','Compensation:Restoration']],body:rows.map(r=>[r.task,r.achieved,r.train,r.independency,r.c2rPercent,r.ratio]),headStyles:{fillColor:[37,99,235],textColor:255},styles:{fontSize:8}});
+      y=doc.lastAutoTable.finalY+8;doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(15,23,42);
+      doc.text(`Overall Independency: ${totalSlots?formatPercent(totalIndependence/totalSlots):'—'}    Overall C2R %: ${totalSlots?formatPercent(totalRestoration/(totalCompensation+totalRestoration)):'—'}    Overall Compensation:Restoration: ${totalSlots?`${totalCompensation}:${totalRestoration}`:'—'}`,14,y);
       tasks.forEach(t=>{
         doc.addPage();heading(`${t.name} - Detailed Assessment`,20);
-        const body=[];t.levels.forEach(l=>{const s=taskState(t.id),ans=s.answer[l.num]||'Not Assessed';body.push([{content:`FIL ${l.num}: ${l.name}`,styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:ans,styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:`Question: ${l.stmt}`,styles:{fontSize:8,fillColor:[241,245,249]}}])});
-        const m=metrics(t.id);body.push([{content:'Task calculations',styles:{fontStyle:'bold',fillColor:[239,246,255]}},{content:`Dep ${formatPercent(m.dep)} / Ind ${formatPercent(m.ind)}`,styles:{fillColor:[239,246,255]}},{content:`C2R ${m.c2rDisplay}`,styles:{fillColor:[239,246,255]}}]);
-        body.push([{content:`Difficulty: ${taskState(t.id).diff.map(i=>difficultyOptions[i]).join(', ')||'None'}\nAssistance: ${taskState(t.id).assist.map(i=>assistanceOptions[i]).join(', ')||'None'}`,colSpan:3,styles:{fontSize:8,textColor:[71,85,105]}}]);
+        const body=[];
+        if(!isApplicable(t.id)){
+          body.push([{content:'Not Applicable',styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:'Not Applicable',styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:'Not Applicable',styles:{fontSize:8,fillColor:[241,245,249]}}]);
+        } else {
+          t.levels.forEach(l=>{const s=taskState(t.id),ans=s.answer[l.num]||'Not Assessed';body.push([{content:`FIL ${l.num}: ${l.name}`,styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:ans,styles:{fontStyle:'bold',fillColor:[241,245,249]}},{content:`Question: ${l.stmt}`,styles:{fontSize:8,fillColor:[241,245,249]}}])});
+          const m=metrics(t.id);
+          const report=taskReport(t.id);
+          body.push([{content:'Task metrics',styles:{fontStyle:'bold',fillColor:[239,246,255]}},{content:`FIL Achieved: ${report.achieved===0?'FIL 0':report.achieved?`FIL ${report.achieved}`:'—'}\nTo Train: ${report.toTrain}\nIndependency: ${formatPercent(m.independency)}\nC2R %: ${formatPercent(m.c2rPercent)}`,styles:{fillColor:[239,246,255]}},{content:`Compensation:Restoration: ${m.c2rDisplay}`,styles:{fillColor:[239,246,255]}}]);
+          body.push([{content:`Notes: ${taskState(t.id).notes.trim()||'None'}\nDifficulty: ${taskState(t.id).diff.map(i=>difficultyOptions[i]).join(', ')||'None'}\nAssistance: ${taskState(t.id).assist.map(i=>assistanceOptions[i]).join(', ')||'None'}`,colSpan:3,styles:{fontSize:8,textColor:[71,85,105]}}]);
+        }
         doc.autoTable({startY:30,body,theme:'grid',styles:{cellPadding:3,overflow:'linebreak'},columnStyles:{0:{width:42},1:{width:32},2:{width:106}}});
       });
       doc.addPage();y=heading('Clinical Notes & Recommendations',20);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(15,23,42);
@@ -421,7 +505,7 @@
     ['ptName','ptId','ptDate','ptAssessor','filTherapist'].forEach(id=>document.getElementById(id).addEventListener('input',updateSummary));
     initState();
     document.getElementById('ptDate').value=new Date().toISOString().slice(0,10);
-    restoreFolder();renderTabs();renderPanels();updateSummary();
+    restoreFolder();renderInitialTaskSelection();renderTabs();renderPanels();updateSummary();
   </script>
 </body>
 </html>
